@@ -1,0 +1,14 @@
+{
+  "name": "seth-wisdom-vault",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Wisdom vault to parse Seth Godin mbox files and explore daily marketing pearls of wisdom",
+  "scripts": {
+    "install:all": "npm install --prefix server && npm install --prefix client",
+    "dev": "node server/index.js & npm --prefix client run dev",
+    "start": "node server/index.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC"
+}

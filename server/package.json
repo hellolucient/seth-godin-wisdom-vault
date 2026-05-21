@@ -1,0 +1,21 @@
+{
+  "name": "seth-wisdom-vault-server",
+  "version": "1.0.0",
+  "description": "Backend server for parsing, saving and searching Seth Godin posts",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "@google/generative-ai": "^0.11.4",
+    "cheerio": "^1.1.0",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "mailparser": "^3.7.1",
+    "multer": "^1.4.5-lts.1",
+    "rss-parser": "^3.13.0",
+    "sqlite3": "^5.1.7"
+  }
+}
