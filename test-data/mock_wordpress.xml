@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<rss version="2.0"
+	xmlns:excerpt="http://wordpress.org/export/1.2/excerpt/"
+	xmlns:content="http://purl.org/rss/1.0/modules/content/"
+	xmlns:wfw="http://wellformedweb.org/commentAPI/"
+	xmlns:dc="http://purl.org/dc/elements/1.1/"
+	xmlns:wp="http://wordpress.org/export/1.2/"
+>
+<channel>
+	<item>
+		<title>My WordPress Post Title</title>
+		<pubDate>Wed, 20 May 2026 12:00:00 +0000</pubDate>
+		<dc:creator>admin</dc:creator>
+		<guid isPermaLink="false">https://example.com/?p=123</guid>
+		<description></description>
+		<content:encoded><![CDATA[<p>This is the content of my WordPress post. It is very inspiring. We need marketing and leadership.</p>]]></content:encoded>
+		<wp:post_id>123</wp:post_id>
+		<wp:post_date><![CDATA[2026-05-20 12:00:00]]></wp:post_date>
+		<wp:status><![CDATA[publish]]></wp:status>
+		<wp:post_type><![CDATA[post]]></wp:post_type>
+		<category domain="category" nicename="marketing"><![CDATA[Marketing]]></category>
+		<category domain="post_tag" nicename="leadership"><![CDATA[Leadership]]></category>
+	</item>
+	<item>
+		<title>Draft Post (Should be skipped)</title>
+		<pubDate>Wed, 20 May 2026 12:00:00 +0000</pubDate>
+		<content:encoded><![CDATA[Draft content]]></content:encoded>
+		<wp:post_id>124</wp:post_id>
+		<wp:status><![CDATA[draft]]></wp:status>
+		<wp:post_type><![CDATA[post]]></wp:post_type>
+	</item>
+	<item>
+		<title>Attachment (Should be skipped)</title>
+		<pubDate>Wed, 20 May 2026 12:00:00 +0000</pubDate>
+		<content:encoded><![CDATA[Attachment content]]></content:encoded>
+		<wp:post_id>125</wp:post_id>
+		<wp:status><![CDATA[publish]]></wp:status>
+		<wp:post_type><![CDATA[attachment]]></wp:post_type>
+	</item>
+</channel>
+</rss>

@@ -9,7 +9,9 @@ import {
   RefreshCw, 
   CheckCircle, 
   AlertCircle, 
-  FileText 
+  FileText,
+  Globe,
+  Table
 } from 'lucide-react';
 
 export default function ImportOptions({ onRefreshStats }) {
@@ -40,6 +42,10 @@ export default function ImportOptions({ onRefreshStats }) {
 
   // Backup State
   const backupInputRef = useRef(null);
+
+  // WordPress and CSV Refs
+  const wpInputRef = useRef(null);
+  const csvInputRef = useRef(null);
 
   const resetStatus = () => {
     setLoading(false);
@@ -185,6 +191,78 @@ export default function ImportOptions({ onRefreshStats }) {
     reader.readAsText(backupFile);
   };
 
+  // WordPress XML Import Handler
+  const handleWordpressImport = async (e) => {
+    if (!e.target.files || !e.target.files[0]) return;
+    const xmlFile = e.target.files[0];
+
+    setLoading(true);
+    setStatus('');
+    setMessage('');
+    setResults(null);
+
+    const formData = new FormData();
+    formData.append('wordpress', xmlFile);
+
+    try {
+      const response = await fetch('/api/import/wordpress', {
+        method: 'POST',
+        body: formData
+      });
+
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to import WordPress XML.');
+      }
+
+      setStatus('success');
+      setResults(data.results);
+      onRefreshStats();
+    } catch (err) {
+      setStatus('error');
+      setMessage(err.message || 'An error occurred importing WordPress XML.');
+    } finally {
+      setLoading(false);
+      if (wpInputRef.current) wpInputRef.current.value = '';
+    }
+  };
+
+  // CSV Import Handler
+  const handleCsvImport = async (e) => {
+    if (!e.target.files || !e.target.files[0]) return;
+    const csvFile = e.target.files[0];
+
+    setLoading(true);
+    setStatus('');
+    setMessage('');
+    setResults(null);
+
+    const formData = new FormData();
+    formData.append('csv', csvFile);
+
+    try {
+      const response = await fetch('/api/import/csv', {
+        method: 'POST',
+        body: formData
+      });
+
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to import CSV.');
+      }
+
+      setStatus('success');
+      setResults(data.results);
+      onRefreshStats();
+    } catch (err) {
+      setStatus('error');
+      setMessage(err.message || 'An error occurred importing CSV.');
+    } finally {
+      setLoading(false);
+      if (csvInputRef.current) csvInputRef.current.value = '';
+    }
+  };
+
   // MBOX Uploader Handlers
   const handleDrag = (e) => {
     e.preventDefault();
@@ -320,6 +398,22 @@ export default function ImportOptions({ onRefreshStats }) {
         </button>
         <button 
           type="button"
+          className={`import-tab-btn ${activeSubTab === 'wordpress' ? 'active' : ''}`}
+          onClick={() => { setActiveSubTab('wordpress'); resetStatus(); }}
+        >
+          <Globe style={{ width: '16px', height: '16px' }} />
+          WordPress XML
+        </button>
+        <button 
+          type="button"
+          className={`import-tab-btn ${activeSubTab === 'csv' ? 'active' : ''}`}
+          onClick={() => { setActiveSubTab('csv'); resetStatus(); }}
+        >
+          <Table style={{ width: '16px', height: '16px' }} />
+          CSV Upload
+        </button>
+        <button 
+          type="button"
           className={`import-tab-btn ${activeSubTab === 'backup' ? 'active' : ''}`}
           onClick={() => { setActiveSubTab('backup'); resetStatus(); }}
         >
@@ -334,7 +428,13 @@ export default function ImportOptions({ onRefreshStats }) {
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '2rem 0', gap: '1rem' }}>
             <RefreshCw style={{ animation: 'spin 1.5s linear infinite', color: 'var(--accent)', width: '36px', height: '36px' }} />
             <span style={{ fontSize: '0.9rem', color: 'var(--text-secondary)' }}>
-              {activeSubTab === 'rss' ? 'Contacting RSS feed and syncing posts...' : 'Scraping and analyzing blog post...'}
+              {activeSubTab === 'rss' 
+                ? 'Contacting RSS feed and syncing posts...' 
+                : activeSubTab === 'wordpress' 
+                  ? 'Parsing WordPress export XML archive...' 
+                  : activeSubTab === 'csv' 
+                    ? 'Parsing CSV data sheet...' 
+                    : 'Scraping and analyzing blog post...'}
             </span>
           </div>
         )}
@@ -498,6 +598,71 @@ export default function ImportOptions({ onRefreshStats }) {
               </button>
             </div>
           </form>
+        )}
+
+        {/* SUBTAB: WordPress XML */}
+        {!loading && status === '' && activeSubTab === 'wordpress' && (
+          <div>
+            <p className="settings-description" style={{ marginBottom: '1rem' }}>
+              Import posts directly from a WordPress XML export file (WXR format). Drafts and non-post assets will be automatically skipped.
+            </p>
+            <div 
+              className="dropzone"
+              onClick={() => wpInputRef.current.click()}
+              style={{ padding: '2rem 1.5rem', marginBottom: '0', cursor: 'pointer' }}
+            >
+              <input
+                ref={wpInputRef}
+                type="file"
+                className="file-input"
+                accept=".xml"
+                onChange={handleWordpressImport}
+                style={{ display: 'none' }}
+              />
+              <Globe className="dropzone-icon" style={{ color: 'var(--accent)' }} />
+              <h3 className="dropzone-title">Upload WordPress XML Archive</h3>
+              <p className="dropzone-subtitle">Click to select a .xml file from your device</p>
+            </div>
+          </div>
+        )}
+
+        {/* SUBTAB: CSV Upload */}
+        {!loading && status === '' && activeSubTab === 'csv' && (
+          <div>
+            <p className="settings-description" style={{ marginBottom: '1rem' }}>
+              Upload a bulk list of posts using a CSV file. Use our official CSV template to format your columns properly.
+            </p>
+            
+            <div style={{ marginBottom: '1.5rem' }}>
+              <a 
+                href="/api/templates/csv" 
+                download
+                className="theme-toggle-btn"
+                style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem', width: 'auto', fontSize: '0.85rem' }}
+              >
+                <Download style={{ width: '16px', height: '16px' }} />
+                Download CSV Template
+              </a>
+            </div>
+
+            <div 
+              className="dropzone"
+              onClick={() => csvInputRef.current.click()}
+              style={{ padding: '2rem 1.5rem', marginBottom: '0', cursor: 'pointer' }}
+            >
+              <input
+                ref={csvInputRef}
+                type="file"
+                className="file-input"
+                accept=".csv"
+                onChange={handleCsvImport}
+                style={{ display: 'none' }}
+              />
+              <Table className="dropzone-icon" style={{ color: 'var(--accent)' }} />
+              <h3 className="dropzone-title">Upload Completed CSV Template</h3>
+              <p className="dropzone-subtitle">Click to select a .csv file from your device</p>
+            </div>
+          </div>
         )}
 
         {/* SUBTAB 4: Backup & Restore */}

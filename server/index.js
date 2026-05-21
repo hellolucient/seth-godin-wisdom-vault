@@ -6,6 +6,7 @@ import fs from 'fs';
 import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
 import { GoogleGenerativeAI } from '@google/generative-ai';
+import csvParser from 'csv-parser';
 
 import {
   initDb,
@@ -492,6 +493,210 @@ app.post('/api/import/backup', async (req, res) => {
   } catch (error) {
     console.error('Backup import error:', error);
     res.status(500).json({ error: `Failed to restore database backup: ${error.message}` });
+  }
+});
+
+// Endpoint: Download CSV Template
+app.get('/api/templates/csv', (req, res) => {
+  res.setHeader('Content-Type', 'text/csv');
+  res.setHeader('Content-Disposition', 'attachment; filename="wisdom_vault_template.csv"');
+  res.send('title,date,content,url,categories\n"Example Article Title","2026-05-21","This is the body content of your post. It can contain HTML tags or plain text. Make sure to wrap it in quotes if it spans multiple lines.","https://example.com/blog/example-post","marketing,strategy"\n');
+});
+
+// Endpoint: Import WordPress XML
+app.post('/api/import/wordpress', upload.single('wordpress'), async (req, res) => {
+  if (!req.file) {
+    return res.status(400).json({ error: 'No XML file uploaded.' });
+  }
+
+  console.log(`Importing WordPress XML: ${req.file.originalname}`);
+
+  try {
+    const xmlContent = fs.readFileSync(req.file.path, 'utf8');
+    const $ = load(xmlContent, { xmlMode: true });
+
+    let totalProcessed = 0;
+    let imported = 0;
+    let duplicates = 0;
+    let errors = 0;
+    const items = $('item');
+
+    for (let i = 0; i < items.length; i++) {
+      try {
+        const el = items[i];
+        const $item = $(el);
+
+        const postType = $item.find('wp\\:post_type').text() || $item.find('post_type').text();
+        const status = $item.find('wp\\:status').text() || $item.find('status').text();
+
+        // Standard WordPress WXR tags: only import published posts
+        if (postType && postType !== 'post') continue;
+        if (status && status !== 'publish') continue;
+
+        totalProcessed++;
+
+        const rawTitle = $item.find('title').text() || 'Untitled Post';
+        const title = cleanSubject(rawTitle);
+
+        const rawDate = $item.find('pubDate').text() || $item.find('dc\\:date').text();
+        const date = rawDate ? new Date(rawDate).toISOString() : new Date().toISOString();
+
+        const message_id = $item.find('wp\\:post_id').text() || $item.find('guid').text() || `wp_${Date.now()}_${i}`;
+
+        const contentEncoded = $item.find('content\\:encoded').text() || $item.find('content').text() || '';
+        const { cleanedHtml, cleanedText } = cleanEmailBody(contentEncoded, contentEncoded.replace(/<[^>]*>/g, '').substring(0, 1000), title);
+
+        // Auto-categorize & merge tags
+        const { category, tags: autoTags } = categorizeAndTag(title, cleanedText);
+
+        const wpTags = [];
+        $item.find('category').each((j, catEl) => {
+          const $cat = $(catEl);
+          const domain = $cat.attr('domain');
+          const name = $cat.text().trim();
+          if (name && (domain === 'category' || domain === 'post_tag')) {
+            wpTags.push(name.toLowerCase());
+          }
+        });
+
+        const combinedTags = Array.from(new Set([...autoTags, ...wpTags]));
+
+        const dbResult = await insertPost({
+          message_id,
+          title,
+          date,
+          content_html: cleanedHtml || `<p>${cleanedText.replace(/\n\n/g, '</p><p>').replace(/\n/g, '<br>')}</p>`,
+          content_text: cleanedText,
+          category,
+          tags: JSON.stringify(combinedTags)
+        });
+
+        if (dbResult.isDuplicate) {
+          duplicates++;
+        } else {
+          imported++;
+        }
+      } catch (itemErr) {
+        console.error('Error importing WordPress item:', itemErr.message);
+        errors++;
+      }
+    }
+
+    // Clean up temporary file
+    fs.unlinkSync(req.file.path);
+
+    res.json({
+      success: true,
+      results: {
+        totalProcessed,
+        imported,
+        duplicates,
+        errors
+      }
+    });
+  } catch (error) {
+    console.error('WordPress import error:', error);
+    if (req.file && fs.existsSync(req.file.path)) {
+      fs.unlinkSync(req.file.path);
+    }
+    res.status(500).json({ error: `Failed to parse WordPress XML: ${error.message}` });
+  }
+});
+
+// Endpoint: Import CSV
+app.post('/api/import/csv', upload.single('csv'), async (req, res) => {
+  if (!req.file) {
+    return res.status(400).json({ error: 'No CSV file uploaded.' });
+  }
+
+  console.log(`Importing CSV: ${req.file.originalname}`);
+
+  try {
+    const csvRows = [];
+    fs.createReadStream(req.file.path)
+      .pipe(csvParser())
+      .on('data', (row) => {
+        csvRows.push(row);
+      })
+      .on('end', async () => {
+        let totalProcessed = 0;
+        let imported = 0;
+        let duplicates = 0;
+        let errors = 0;
+
+        for (const row of csvRows) {
+          totalProcessed++;
+          try {
+            const rawTitle = row.title || row.Title || 'Untitled Post';
+            const title = cleanSubject(rawTitle);
+
+            const rawDate = row.date || row.Date;
+            const date = rawDate ? new Date(rawDate).toISOString() : new Date().toISOString();
+
+            const content = row.content || row.Content || '';
+            const url = row.url || row.Url || '';
+            const message_id = url || `csv_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+
+            const { cleanedHtml, cleanedText } = cleanEmailBody(content, content.replace(/<[^>]*>/g, '').substring(0, 1000), title);
+
+            // Auto-categorize & merge tags
+            let { category, tags } = categorizeAndTag(title, cleanedText);
+
+            const csvCategories = row.categories || row.Categories || '';
+            if (csvCategories) {
+              const splitCats = csvCategories.split(',').map(c => c.trim().toLowerCase()).filter(Boolean);
+              tags = Array.from(new Set([...tags, ...splitCats]));
+            }
+
+            const dbResult = await insertPost({
+              message_id,
+              title,
+              date,
+              content_html: cleanedHtml || `<p>${cleanedText.replace(/\n\n/g, '</p><p>').replace(/\n/g, '<br>')}</p>`,
+              content_text: cleanedText,
+              category,
+              tags: JSON.stringify(tags)
+            });
+
+            if (dbResult.isDuplicate) {
+              duplicates++;
+            } else {
+              imported++;
+            }
+          } catch (itemErr) {
+            console.error('Error importing CSV row:', itemErr.message);
+            errors++;
+          }
+        }
+
+        // Clean up file
+        if (fs.existsSync(req.file.path)) {
+          fs.unlinkSync(req.file.path);
+        }
+
+        res.json({
+          success: true,
+          results: {
+            totalProcessed,
+            imported,
+            duplicates,
+            errors
+          }
+        });
+      })
+      .on('error', (err) => {
+        console.error('CSV parse stream error:', err);
+        if (fs.existsSync(req.file.path)) {
+          fs.unlinkSync(req.file.path);
+        }
+        res.status(500).json({ error: `Failed to parse CSV file: ${err.message}` });
+      });
+  } catch (error) {
+    console.error('CSV import setup error:', error);
+    if (req.file && fs.existsSync(req.file.path)) {
+      fs.unlinkSync(req.file.path);
+    }
+    res.status(500).json({ error: `Failed to run CSV import: ${error.message}` });
   }
 });
 
