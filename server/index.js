@@ -655,6 +655,19 @@ app.post('/api/reset', async (req, res) => {
   }
 });
 
+// Serve static files from the React client build in production
+const clientBuildPath = path.join(__dirname, '../client/dist');
+app.use(express.static(clientBuildPath));
+
+// Fallback all other routes to index.html for React Router
+app.get('*', (req, res) => {
+  if (fs.existsSync(path.join(clientBuildPath, 'index.html'))) {
+    res.sendFile(path.join(clientBuildPath, 'index.html'));
+  } else {
+    res.status(404).send('Frontend build not found. Run "npm run build --prefix client" first.');
+  }
+});
+
 app.listen(PORT, () => {
   console.log(`Backend server running on http://localhost:${PORT}`);
 });

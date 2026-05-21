@@ -4,11 +4,12 @@ import path from 'path';
 import fs from 'fs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const dbPath = path.join(__dirname, 'wisdom.db');
+const dbPath = process.env.DATABASE_PATH || path.join(__dirname, 'wisdom.db');
+const dbDir = path.dirname(dbPath);
 
 // Ensure db directory exists
-if (!fs.existsSync(__dirname)) {
-  fs.mkdirSync(__dirname, { recursive: true });
+if (!fs.existsSync(dbDir)) {
+  fs.mkdirSync(dbDir, { recursive: true });
 }
 
 const db = new sqlite3.Database(dbPath, (err) => {
